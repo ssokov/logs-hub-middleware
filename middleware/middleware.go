@@ -13,6 +13,7 @@ import (
 )
 
 type LogMiddleware struct {
+	client   Client
 	endpoint string
 }
 
@@ -38,6 +39,7 @@ func (e *BadStatusCodeError) Is(target error) bool {
 func NewLogMiddleware(endpoint string) *LogMiddleware {
 	return &LogMiddleware{
 		endpoint: endpoint,
+		client:   *NewClient(endpoint, nil),
 	}
 }
 
@@ -51,7 +53,8 @@ func (l *LogMiddleware) TelegramLogMiddleware(next bot.HandlerFunc) bot.HandlerF
 						log.Printf("panic log middleware: %v", r)
 					}
 				}()
-				err := sendTelegramLog(ctx, l.endpoint, update)
+				convertedUpdate := ToModelsUpdate(*update)
+				err := l.client.Logs.AddTelegramLog(ctx, convertedUpdate)
 				if err != nil {
 					log.Printf("Failed send log to backend. err: %v", err)
 				}
