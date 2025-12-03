@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,14 +13,31 @@ import (
 )
 
 type LogMiddleware struct {
-	Endpoint string
+	endpoint string
 }
 
-var ErrBadStatusCode = errors.New("bad status code")
+type BadStatusCodeError struct {
+	Code int
+}
 
+func (e *BadStatusCodeError) Error() string {
+	return fmt.Sprintf("bad status code: %d", e.Code)
+}
+func (e *BadStatusCodeError) StatusCode() int {
+	return e.Code
+}
+func (e *BadStatusCodeError) Is(target error) bool {
+	if target == nil {
+		return e == nil
+	}
+	_, ok := target.(*BadStatusCodeError)
+	return ok
+}
+
+// endpoint - URL бэкенда для отправки логов
 func NewLogMiddleware(endpoint string) *LogMiddleware {
 	return &LogMiddleware{
-		Endpoint: endpoint,
+		endpoint: endpoint,
 	}
 }
 
@@ -29,37 +45,43 @@ func (l *LogMiddleware) TelegramLogMiddleware(next bot.HandlerFunc) bot.HandlerF
 	return func(ctx context.Context, bot *bot.Bot, update *models.Update) {
 		if update.Message != nil {
 
-			err := SendTelegramLog(ctx, l.Endpoint, update)
+			go func(ctx context.Context, endpoint string, update *models.Update) {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Printf("panic log middleware: %v", r)
+					}
+				}()
+				err := sendTelegramLog(ctx, l.endpoint, update)
+				if err != nil {
+					log.Printf("Failed send log to backend. err: %v", err)
+				}
+			}(ctx, l.endpoint, update)
 
-			if err != nil {
-				log.Printf("Failed send log to backend. err: %v", err)
-			}
 		}
 		next(ctx, bot, update)
 	}
 }
 
-func SendTelegramLog(ctx context.Context, endpoint string, log *models.Update) error {
+func sendTelegramLog(ctx context.Context, endpoint string, log *models.Update) error {
 	data, err := json.Marshal(log)
 	if err != nil {
-		return fmt.Errorf("failed marshal telegram log. err: %v", err)
+		return fmt.Errorf("failed marshal telegram log. err: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewBuffer(data))
 	if err != nil {
-		return fmt.Errorf("failed create request. err: %v", err)
+		return fmt.Errorf("failed create request. err: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed send request. err: %v", err)
+		return fmt.Errorf("failed send request. err: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("%w: status %d,",
-			ErrBadStatusCode, resp.StatusCode)
+		return &BadStatusCodeError{Code: resp.StatusCode}
 	}
 
 	return nil
