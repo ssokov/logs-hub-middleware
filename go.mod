@@ -1,4 +1,4 @@
-module github.com/ssokov/logs-hub-middleware/v2
+module github.com/ssokov/logs-hub-middleware
 
 go 1.24.5
 
