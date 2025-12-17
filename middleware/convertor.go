@@ -3,7 +3,7 @@ package middleware
 import (
 	"github.com/go-telegram/bot/models"
 )
-
+// ToModelsUpdate converts telegram update to LogReq model.
 func ToModelsUpdate(update models.Update, serviceName string) LogReq {
 
 	return LogReq{
