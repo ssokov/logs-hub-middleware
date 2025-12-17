@@ -46,11 +46,18 @@ func NewClient(endpoint string, httpClient *http.Client) *Client {
 type Log struct {
 	Error_code   int    `json:"error_code"`
 	Message      string `json:"message"`
-	// Params       `json:"params"`
 	Service_name string `json:"service_name"`
 	Tg_nickname  string `json:"tg_nickname"`
 	Tg_user_id   int    `json:"tg_user_id"`
 	Timestamp    string `json:"timestamp"`
+	Type         string `json:"type"`
+}
+
+type LogReq struct {
+	Message      string `json:"message"`
+	Service_name string `json:"service_name"`
+	Tg_nickname  string `json:"tg_nickname"`
+	Tg_user_id   int    `json:"tg_user_id"`
 	Type         string `json:"type"`
 }
 
@@ -74,9 +81,9 @@ func newClientLogs(client *rpcClient) *svcLogs {
 	}
 }
 
-func (c *svcLogs) AddTelegramLog(ctx context.Context, log Log) (err error) {
+func (c *svcLogs) AddTelegramLog(ctx context.Context, log LogReq) (err error) {
 	_req := struct {
-		Log Log
+		Log LogReq
 	}{
 		Log: log,
 	}
